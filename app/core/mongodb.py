@@ -19,11 +19,11 @@ async def lifespan(app: FastAPI):
               tls=True)
 
     app.db = app.mongodb_client.get_database(settings.MONGO_DB)
-    print("app.db", app.db)
+    # print("app.db", app.db)
     print("mongo db connected")
     yield
     print("Mongo DB disconnected")
 
 def get_db(request: Request) :
-    print("-------------------------------------------------------------------------------")
+    # print("-------------------------------------------------------------------------------")
     return request.app.db
