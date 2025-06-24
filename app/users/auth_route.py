@@ -1,9 +1,9 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel, EmailStr
 from app.core.mongodb import get_db
 from app.models.user import User
-from app.utils.security import hash_password, verify_password  # create this if not yet
-
+from app.utils.security import hash_password, verify_password , create_access_token # create this if not yet
+from app.utils.jwt_bearer import JWTBearer
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 collection_name = "users"
@@ -39,10 +39,31 @@ async def register_user(data: RegisterRequest, request: Request):
     result = await db[collection_name].insert_one(user.dict(exclude={"id"}))
     return {"message": "User registered successfully", "user_id": str(result.inserted_id)}
 
+
+
 @router.post("/login")
 async def login_user(data: LoginRequest, request: Request):
     db = get_db(request)
     user = await db[collection_name].find_one({"email_address": data.email_address})
     if not user or not verify_password(data.password, user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    return {"message": "Login successful", "user_id": str(user["_id"]), "role": user["role"]}
+    
+    token_data = {
+        "user_id": str(user["_id"]),
+        "role": user["role"],
+        'gender' : user['gender']
+    }
+
+    access_token = create_access_token(token_data)
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_id": str(user["_id"]),
+        "role": user["role"]
+    }
+
+    # return {"message": "Login successful", "user_id": str(user["_id"]), "role": user["role"]}
+@router.get('/me')
+async def get_profile(user_data : dict = Depends(JWTBearer())) : 
+    return {'user_info' : user_data}
