@@ -1,6 +1,9 @@
 from passlib.context import CryptContext
 import jwt
 from datetime import datetime, timedelta
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+
 
 SECRET_KEY = "your_secret_here"
 ALGORITHM = "HS256"
@@ -23,3 +26,4 @@ def create_access_token(data: dict):
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+

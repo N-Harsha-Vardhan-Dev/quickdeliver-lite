@@ -1,12 +1,12 @@
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Request, Depends
 from bson import ObjectId
-from pydantic import BaseModel
-
+from pydantic import BaseModel, EmailStr
 from app.models.delivery import CreateDeliveryRequest
 from app.core.mongodb import get_db
 from app.utils import jwt_bearer
 from app.utils.jwt_bearer import JWTBearer
+
 
 router = APIRouter(prefix='/api/deliveries', tags=['Delivery'])
 
@@ -33,6 +33,7 @@ async def create_delivery(data : CreateDeliveryRequest, request: Request, user_d
         "pickup_location" : data.pickup_location, 
         "drop_location" : data.drop_location, 
         "item_description" : data.item_description,
+        "phone_number": data.phone_number,
         "status" : 'pending', 
         "delivery_charge" : None,
         "requested_at" : datetime.now(),
@@ -60,6 +61,7 @@ async def list_pending_deliveries(request: Request) :
                 "pickup_location" : delivery['pickup_location'], 
                 "drop_location" : delivery['drop_location'], 
                 "item_description" : delivery['item_description'], 
+                "phone_number": delivery.get('phone_number'),
                 "requested_at" : delivery["requested_at"]
             }
         )
@@ -115,6 +117,7 @@ async def get_my_deliveries(request : Request, user = Depends(JWTBearer())) :
             "pickup_location" : delivery['pickup_location'],
             "drop_location" : delivery['drop_location'], 
             "status" : delivery['status'], 
+            "phone_number": delivery.get('phone_number'),
             'requested_at' : delivery['requested_at']
         })
     
@@ -178,9 +181,36 @@ async def view_customer_deliveries(
             "pickup_location": delivery["pickup_location"],
             "drop_location": delivery["drop_location"],
             "status": delivery["status"],
+            "phone_number": delivery.get("phone_number"),
             "requested_at": delivery["requested_at"],
             "delivered_at": delivery.get("delivered_at")
+
         })
 
     return {"deliveries": deliveries}
 
+#  create a rpoute to view all deliveries for a customer
+@router.get("/{delivery_id}")
+async def view_delivery_by_id(
+    delivery_id: str,
+    request: Request,
+    user: dict = Depends(JWTBearer())
+):
+    if user["role"] != "customer":
+        raise HTTPException(status_code=403, detail="Only customers can view their deliveries")
+
+    db = get_db(request)
+    delivery = await db[collection_name].find_one({"_id": ObjectId(delivery_id), "customer_id": ObjectId(user["user_id"])})
+
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+
+    return {
+        "id": str(delivery["_id"]),
+        "pickup_location": delivery["pickup_location"],
+        "drop_location": delivery["drop_location"],
+        "status": delivery["status"],
+        "phone_number": delivery.get("phone_number"),
+        "requested_at": delivery["requested_at"],
+        "delivered_at": delivery.get("delivered_at")
+    }
