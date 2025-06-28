@@ -19,9 +19,21 @@ transitions = {
     "accepted" : "in-transit",
     "in-transit" : "delivered"
 }
+#week 2
 
 @router.post('/', dependencies= [Depends(JWTBearer)])
 async def create_delivery(data : CreateDeliveryRequest, request: Request, user_data : dict = Depends(JWTBearer())) : 
+    """
+    Create a new delivery request by a customer.
+
+    Requires:
+        - Authenticated user with role 'customer'.
+        - JSON body with {pickup location, drop location, item description, and phone number.}
+
+    Returns:
+        - Success message with delivery ID if created.
+        - 401 if non-customer tries to create.
+    """
     if user_data['role'] != 'customer' : 
         raise HTTPException(status_code=401, detail="Customers can only create delvieries")
     
@@ -49,6 +61,12 @@ async def create_delivery(data : CreateDeliveryRequest, request: Request, user_d
 
 @router.get('/pending') 
 async def list_pending_deliveries(request: Request) : 
+    """
+    List all pending delivery requests available for agents to accept.
+
+    Returns:
+        - List of deliveries with pickup/drop locations, description, and requested time.
+    """
     db = get_db(request)
 
     deliveries_list = db[collection_name].find({"status" : "pending"}).sort({"requested" : -1})
@@ -72,6 +90,18 @@ async def list_pending_deliveries(request: Request) :
 
 @router.post('/{delivery_id}/accept', dependencies= [Depends(JWTBearer)])
 async def accept_delivery(delivery_id : str, request :Request, user : dict = Depends(JWTBearer()) ) : 
+    """
+    Allows a delivery agent to accept a pending delivery.
+
+    Requires:
+        - Authenticated user with role 'agent'.
+        - Path parameter: delivery_id.
+
+    Returns:
+        - Success message if accepted.
+        - 403 if not an agent or already accepted.
+        - 404 if delivery not found.
+    """
     if user['role'] != "agent" : 
         raise HTTPException(status_code=403, detail= "only delivery agents can accept deliveries")
     
@@ -103,6 +133,15 @@ async def accept_delivery(delivery_id : str, request :Request, user : dict = Dep
 
 @router.get('/my')
 async def get_my_deliveries(request : Request, user = Depends(JWTBearer())) : 
+    """
+    Get all deliveries assigned to the currently logged-in delivery agent.
+
+    Requires:
+        - Authenticated user with role 'agent'.
+
+    Returns:
+        - List of deliveries with status, pickup/drop locations, and request time.
+    """
     if user['role'] != 'agent' : 
         raise HTTPException(status_code=403, detail="Only driver can see their deliveries")
     
@@ -129,6 +168,19 @@ async def get_my_deliveries(request : Request, user = Depends(JWTBearer())) :
 
 @router.patch('/{delivery_id}/status')
 async def update_delivery_status(delivery_id : str, data : StatusUpdate, request:Request, user = Depends(JWTBearer())) : 
+    """
+    Update the delivery status from 'accepted' to 'in-transit', or 'in-transit' to 'delivered'.
+
+    Requires:
+        - Authenticated user with role 'agent'.
+        - Path parameter: delivery_id.
+        - JSON body with the next valid status.
+
+    Returns:
+        - Success message if status is updated.
+        - 403 if unauthorized or not assigned to delivery.
+        - 400 if invalid status transition.
+    """
     if user['role'] != 'agent' :
         raise HTTPException(status_code=403, detail="Only delivery agents can update status")
     
@@ -167,6 +219,15 @@ async def view_customer_deliveries(
     request: Request,
     user: dict = Depends(JWTBearer())
 ):
+    """
+    View all deliveries requested by the logged-in customer.
+
+    Requires:
+        - Authenticated user with role 'customer'.
+
+    Returns:
+        - List of all deliveries with status, timestamps, and location info.
+    """
     if user["role"] != "customer":
         raise HTTPException(status_code=403, detail="Only customers can see their deliveries")
     
@@ -196,6 +257,18 @@ async def view_delivery_by_id(
     request: Request,
     user: dict = Depends(JWTBearer())
 ):
+    """
+    View a specific delivery by ID for the logged-in customer.
+
+    Requires:
+        - Authenticated user with role 'customer'.
+        - Path parameter: delivery_id.
+
+    Returns:
+        - Delivery details if found.
+        - 403 if not a customer.
+        - 404 if delivery not found.
+    """
     if user["role"] != "customer":
         raise HTTPException(status_code=403, detail="Only customers can view their deliveries")
 
