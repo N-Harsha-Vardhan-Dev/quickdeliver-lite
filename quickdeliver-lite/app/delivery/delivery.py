@@ -2,7 +2,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Request, Depends
 from bson import ObjectId
 from pydantic import BaseModel, EmailStr
-from app.models.delivery import CreateDeliveryRequest
+from app.models.delivery_model import CreateDeliveryRequest
 from app.core.mongodb import get_db
 from app.utils import jwt_bearer
 from app.utils.jwt_bearer import JWTBearer

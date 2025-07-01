@@ -1,12 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from app.core.mongodb import get_db
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr
-from app.utils.security import hash_password, verify_password
+from app.utils.security import hash_password
 from bson import ObjectId
-from app.utils.jwt_bearer import JWTBearer
-from app.utils.security import create_access_token
-from app.customer import delivery_routes
+
 router = APIRouter(prefix="/api/delivery", tags=["Deliveries"])
 collection_name = "deliveries"
 
@@ -28,72 +26,30 @@ def fix_delivery_id(delivery):
     del delivery["_id"]
     return delivery
 
-@router.post("/register", response_model=Delivery)
-async def register_delivery(delivery: Delivery, request: Request):
+@router.post("/create", response_model=Delivery)
+async def create_delivery(delivery: Delivery, request: Request):
     """
-    Register a new delivery agent.
+    Create a new delivery agent.
 
     Args:
-        delivery (Delivery): JSON body containing name, email, password, and phone number.
+        delivery (Delivery): JSON body with delivery agent data.
 
     Returns:
-        Delivery object with generated ID and hashed password.
-
-    Raises:
-        HTTP 400: If email is already registered.
+        The newly created delivery agent.
     """
     db = get_db(request)
-    existing = await db[collection_name].find_one({"email_address": delivery.email_address})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    delivery_data = delivery.dict(exclude={"id"})
-    delivery_data["password"] = hash_password(delivery.password)
-
-    result = await db[collection_name].insert_one(delivery_data)
+    delivery.password = hash_password(delivery.password)
+    result = await db[collection_name].insert_one(delivery.dict(exclude={"id"}))
     new_delivery = await db[collection_name].find_one({"_id": result.inserted_id})
-    return Delivery(
-        id=str(new_delivery["_id"]),
-        name=new_delivery["name"],
-        email_address=new_delivery["email_address"],
-        password=new_delivery["password"],
-        delivery_id=new_delivery.get("delivery_id", ""),
-        role=new_delivery.get("role", "delivery")
-    )
+    return fix_delivery_id(new_delivery)
 
-@router.post("/login")
-async def login_delivery(data: LoginRequest, request: Request):
+@router.get("/get_all", response_model=List[Delivery])
+async def get_all_deliveries(request: Request):
     """
-    Log in a delivery agent using email and password.
-
-    Args:
-        data (LoginRequest): JSON body containing email and password.
+    Get a list of all registered delivery agents.
 
     Returns:
-        JSON with access token if credentials are valid.
-
-    Raises:
-        HTTP 401: If email or password is incorrect.
-    """
-    db = get_db(request)
-    delivery = await db[collection_name].find_one({"email_address": data.email_address})
-    if not delivery or not verify_password(data.password, delivery["password"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-
-    token = create_access_token({"sub": str(delivery["_id"]), "role": delivery.get("role", "delivery")})
-    return {"access_token": token, "token_type": "bearer"}
-
-
-@router.get("/", response_model=List[Delivery])
-async def get_all_deliveries(request: Request, token: str = Depends(JWTBearer())):
-    """
-    Retrieve a list of all registered delivery agents.
-
-    Requires:
-        - Bearer token authentication.
-
-    Returns:
-        List of delivery agent objects.
+        A list of delivery agent objects.
     """
     db = get_db(request)
     cursor = db[collection_name].find()
@@ -103,21 +59,18 @@ async def get_all_deliveries(request: Request, token: str = Depends(JWTBearer())
     return deliveries
 
 @router.get("/{delivery_id}", response_model=Delivery)
-async def get_delivery_by_id(delivery_id: str, request: Request, token: str = Depends(JWTBearer())):
+async def get_delivery_by_id(delivery_id: str, request: Request):
     """
-    Retrieve a specific delivery agent by their ID.
+    Retrieve a delivery agent by their MongoDB ObjectId.
 
     Args:
-        delivery_id (str): The MongoDB ObjectId of the delivery agent.
-
-    Requires:
-        - Bearer token authentication.
+        delivery_id (str): The ObjectId of the delivery agent.
 
     Returns:
-        Delivery agent object if found.
+        The delivery agent object.
 
     Raises:
-        HTTP 404: If no delivery agent with given ID exists.
+        HTTP 404: If no agent with the given ID is found.
     """
     db = get_db(request)
     delivery = await db[collection_name].find_one({"_id": ObjectId(delivery_id)})
@@ -126,22 +79,19 @@ async def get_delivery_by_id(delivery_id: str, request: Request, token: str = De
     return fix_delivery_id(delivery)
 
 @router.put("/{delivery_id}", response_model=Delivery)
-async def update_delivery(delivery_id: str, delivery: Delivery, request: Request, token: str = Depends(JWTBearer())):
+async def update_delivery(delivery_id: str, delivery: Delivery, request: Request):
     """
-    Update the details of a delivery agent by ID.
+    Update a delivery agent's details by ID.
 
     Args:
-        delivery_id (str): The MongoDB ObjectId of the delivery agent.
-        delivery (Delivery): JSON body with updated fields.
-
-    Requires:
-        - Bearer token authentication.
+        delivery_id (str): The ObjectId of the delivery agent.
+        delivery (Delivery): JSON body with fields to update.
 
     Returns:
-        Updated delivery agent object.
+        The updated delivery agent object.
 
     Raises:
-        HTTP 404: If the agent is not found.
+        HTTP 404: If the delivery agent is not found.
     """
     db = get_db(request)
     update_data = delivery.dict(exclude_unset=True, exclude={"id"})
@@ -156,22 +106,19 @@ async def update_delivery(delivery_id: str, delivery: Delivery, request: Request
     updated = await db[collection_name].find_one({"_id": ObjectId(delivery_id)})
     return fix_delivery_id(updated)
 
-@router.delete("/{delivery_id}", status_code=204)
-async def delete_delivery(delivery_id: str, request: Request, token: str = Depends(JWTBearer())):
+@router.delete("/{delivery_id}")
+async def delete_delivery(delivery_id: str, request: Request):
     """
     Delete a delivery agent by ID.
 
     Args:
-        delivery_id (str): The MongoDB ObjectId of the delivery agent.
-
-    Requires:
-        - Bearer token authentication.
+        delivery_id (str): The ObjectId of the delivery agent.
 
     Returns:
-        Success message on deletion.
+        A success message if deleted.
 
     Raises:
-        HTTP 404: If the agent is not found.
+        HTTP 404: If the delivery agent is not found.
     """
     db = get_db(request)
     result = await db[collection_name].delete_one({"_id": ObjectId(delivery_id)})
