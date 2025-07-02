@@ -7,7 +7,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 SECRET_KEY = "your_secret_here"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 6 # 6 hour
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 day
 
 
 
