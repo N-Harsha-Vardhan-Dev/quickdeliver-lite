@@ -11,6 +11,15 @@ collection_name = "users"
 
 PhoneNumber = Annotated[str, StringConstraints(pattern=r"^\d{10}$")]
 
+class UserInfoResponse(BaseModel):
+    user_id: str
+    role: str
+    gender: str
+    name: str 
+    email_address: EmailStr
+    phone_number: PhoneNumber
+    age: int
+
 class RegisterRequest(BaseModel):
     name: str
     email_address: EmailStr
@@ -61,7 +70,10 @@ async def login_user(data: LoginRequest, request: Request):
         "user_id": str(user["_id"]),
         "email" : user["email_address"],
         "role": user["role"],
-        'gender' : user['gender']
+        'gender' : user['gender'],
+        "name": user["name"], 
+        "phone_number": user["phone_number"],
+        "age": user["age"]
     }
 
     access_token = create_access_token(token_data)
@@ -74,6 +86,14 @@ async def login_user(data: LoginRequest, request: Request):
     }
 
     # return {"message": "Login successful", "user_id": str(user["_id"]), "role": user["role"]}
-@router.get('/me')
+@router.get('/me',response_model=UserInfoResponse)
 async def get_profile(user_data : dict = Depends(JWTBearer())) : 
-    return {'user_info' : user_data}
+    return {
+        "user_id": user_data["user_id"],
+        "name": user_data["name"] , 
+        "age": user_data["age"] ,
+        "role": user_data["role"],
+        "gender": user_data["gender"],
+        "email_address": user_data["email"],  
+        "phone_number": user_data["phone_number"]
+    }
