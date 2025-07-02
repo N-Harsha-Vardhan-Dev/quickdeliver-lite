@@ -5,9 +5,6 @@ from datetime import datetime
 
 class Feedback(BaseModel):
     id: Optional[str] = None
-    delivery_id: str
-    customer_id: str
-    driver_id: str
+    delivery_id: str = None
     rating: int = Field(..., ge=1, le=5)
-    comment: Optional[Annotated[str, StringConstraints(max_length=200)]] = ""
-    timestamp: datetime = Field(default_factory=datetime.now())
+    comment: Optional[Annotated[str, StringConstraints(max_length=200)]] = None
