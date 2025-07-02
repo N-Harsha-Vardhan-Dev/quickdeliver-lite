@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request, Depends
 from typing import List
-from datetime import datetime
 from bson import ObjectId
 from app.core.mongodb import get_db
 from app.utils.jwt_bearer import JWTBearer 
@@ -8,7 +7,7 @@ from app.models.feedback_model import Feedback
 
 router = APIRouter(prefix="/api/feedback", tags=["Feedback"])
 collection_name = "feedback"
-delivery_collection = "delivery"
+delivery_collection = "deliveries"
 
 def fix_feedback_id(feedback):
     feedback["id"] = str(feedback["_id"])
@@ -31,34 +30,24 @@ async def submit_feedback(feedback: Feedback, request: Request, user_data: dict 
     if user_data.get("role") != "customer":
         raise HTTPException(status_code=403, detail="Only customers can submit feedback")
 
+    if user_data.get("user_id") != feedback.customer_id:
+        raise HTTPException(status_code=403, detail="You can only submit feedback for your own account")
+
     db = get_db(request)
 
-    # Find the delivery
     delivery = await db[delivery_collection].find_one({"_id": ObjectId(feedback.delivery_id)})
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
 
-    if delivery.get("status") != "delivered":
+    if delivery.get("status") != "Delivered":
         raise HTTPException(status_code=400, detail="Cannot submit feedback until delivery is marked as 'Delivered'")
 
-    if str(delivery.get("customer_id")) != str(user_data.get("user_id")):
-        print(delivery.get("customer_id"), user_data.get("user_id"))
-        raise HTTPException(status_code=403, detail="You can only submit feedback for your own delivery")
-
-    # Check for existing feedback
     existing = await db[collection_name].find_one({"delivery_id": feedback.delivery_id})
     if existing:
         raise HTTPException(status_code=400, detail="Feedback already submitted for this delivery")
 
-    # Prepare and insert feedback document
-    feedback_data = feedback.dict(exclude={"id"})
-    feedback_data["customer_id"] = delivery.get("customer_id")
-    feedback_data["driver_id"] = delivery.get("driver_id")
-    feedback_data["timestamp"] = datetime.now()
-
-    result = await db[collection_name].insert_one(feedback_data)
+    result = await db[collection_name].insert_one(feedback.dict(exclude={"id"}))
     new_feedback = await db[collection_name].find_one({"_id": result.inserted_id})
-
     return fix_feedback_id(new_feedback)
 
 
