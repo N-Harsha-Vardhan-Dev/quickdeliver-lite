@@ -6,6 +6,7 @@ from app.users.auth_route import router as auth_router
 from app.delivery.delivery import router as delivery_router
 # from app.customer import delivery_routes
 from app.feedback.feedback import router as feedback_router
+from app.delivery.stats import router as stats_router
 app = FastAPI(lifespan=lifespan)
 
 
@@ -17,6 +18,7 @@ app.include_router(delivery_router)
 # app.include_router(delivery_routes.router)
 
 app.include_router(feedback_router)
+app.include_router(stats_router)
 
 @app.get('/')
 async def main_root() :
