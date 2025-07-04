@@ -41,7 +41,7 @@ async def create_delivery(data : CreateDeliveryRequest, request: Request, user_d
 
     new_delivery = {
         "customer_id" : ObjectId(user_data['user_id']),
-        "partner_id" : None,
+        "driver_id" : None,
         "pickup_location" : data.pickup_location, 
         "drop_location" : data.drop_location, 
         "item_description" : data.item_description,
@@ -119,7 +119,7 @@ async def accept_delivery(delivery_id : str, request :Request, user : dict = Dep
         {"_id" : ObjectId(delivery_id)}, 
         {
             "$set" : {
-                "partner_id" : ObjectId(user["user_id"]),
+                "driver_id" : ObjectId(user["user_id"]),
                 "status"  : "accepted", 
                 "accepted_at" : datetime.now()
             }
@@ -147,7 +147,7 @@ async def get_my_deliveries(request : Request, user = Depends(JWTBearer())) :
         raise HTTPException(status_code=403, detail="Only driver can see their deliveries")
     
     db = get_db(request)
-    result = db[collection_name].find({"partner_id" : ObjectId(user["user_id"])})
+    result = db[collection_name].find({"driver_id" : ObjectId(user["user_id"])})
     # print(result)
     deliveries = []
 
@@ -191,7 +191,7 @@ async def update_delivery_status(delivery_id : str, data : StatusUpdate, request
     if not delivery : 
         raise HTTPException(status_code=404, detail="Delivery not found")
     
-    if str(delivery["partner_id"]) != user["user_id"] : 
+    if str(delivery["driver_id"]) != user["user_id"] : 
         raise HTTPException(status_code=403, detail="You are assigned to this delivery")
     
     current_status = delivery['status']

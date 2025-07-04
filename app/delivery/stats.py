@@ -6,12 +6,14 @@ from app.utils.jwt_bearer import JWTBearer
 
 router = APIRouter(prefix="/api", tags=["Stats"])
 
+
 class StatsResponse(BaseModel):
     user_id: str
     role: str
     email: str
     total_deliveries: int
-    pending_deliveries: int  # <-- NEW
+    pending_deliveries: int
+
 @router.get("/stats", response_model=StatsResponse)
 async def get_user_stats(
     request: Request,
@@ -29,8 +31,13 @@ async def get_user_stats(
     else:
         raise HTTPException(status_code=403, detail="Invalid role")
 
-    total = await db["delivery"].count_documents({key: user_id})
-    pending = await db["delivery"].count_documents({key: user_id, "status": "pending"})
+    try:
+        object_user_id = ObjectId(user_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid user_id format")
+
+    total = await db["delivery"].count_documents({key: object_user_id})
+    pending = await db["delivery"].count_documents({key: object_user_id, "status": "pending"})
 
     return StatsResponse(
         user_id=user_id,
