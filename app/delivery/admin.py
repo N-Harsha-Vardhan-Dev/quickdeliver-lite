@@ -11,6 +11,7 @@ class AppStatsResponse(BaseModel):
     total_pending: int
     total_accepted: int
     total_in_transit: int
+    total_delivered: int
 
 @router.get("/app-stats", response_model=AppStatsResponse)
 async def get_app_stats(db=Depends(get_db)):
@@ -23,13 +24,15 @@ async def get_app_stats(db=Depends(get_db)):
     total_deliveries = await db["delivery"].count_documents({})
     total_pending = await db["delivery"].count_documents({"status": "pending"})
     total_accepted = await db["delivery"].count_documents({"status": "accepted"})
-    total_in_transit = await db["delivery"].count_documents({"status": "in_transit"})
+    total_in_transit = await db["delivery"].count_documents({"status": "in-transit"})
+    total_delivered = await db["delivery"].count_documents({"status": "delivered"})
 
     return AppStatsResponse(
         total_deliveries=total_deliveries,
         total_pending=total_pending,
         total_accepted=total_accepted,
-        total_in_transit=total_in_transit
+        total_in_transit=total_in_transit,
+        total_delivered=total_delivered
     )
 
 @router.get("/admin/deliveries/driver/{driver_id}")
