@@ -6,52 +6,16 @@ from app.utils.jwt_bearer import JWTBearer
 
 router = APIRouter(prefix="/api", tags=["Stats"])
 
-
-class StatsResponse(BaseModel):
-    user_id: str
-    role: str
-    email: str
-    total_deliveries: int
-    pending_deliveries: int
-
-@router.get("/stats", response_model=StatsResponse)
-async def get_user_stats(
-    request: Request,
-    db=Depends(get_db),
-    user_data: dict = Depends(JWTBearer())
-):
-    user_id = user_data["user_id"]
-    role = user_data["role"]
-    email = user_data["email"]
-
-    if role == "customer":
-        key = "customer_id"
-    elif role == "agent":
-        key = "agent_id"
-    else:
-        raise HTTPException(status_code=403, detail="Invalid role")
-
-    try:
-        object_user_id = ObjectId(user_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid user_id format")
-
-    total = await db["delivery"].count_documents({key: object_user_id})
-    pending = await db["delivery"].count_documents({key: object_user_id, "status": "pending"})
-
-    return StatsResponse(
-        user_id=user_id,
-        role=role,
-        email=email,
-        total_deliveries=total,
-        pending_deliveries=pending
-    )
-
-
 @router.get("/driver/{driver_id}/average-rating")
 async def average_rating(driver_id: str, request: Request):
     """
-    Calculate the average rating received by a driver.
+    Calculate the average rating received by a specific driver based on feedback.
+
+    Args:
+        driver_id (str): The driver's user ID.
+
+    Returns:
+        dict: Contains driver_id, average_rating, and total_feedbacks.
     """
     db = get_db(request)
     feedbacks = await db["feedback"].find({"driver_id": ObjectId(driver_id)}).to_list(None)
@@ -70,7 +34,13 @@ async def average_rating(driver_id: str, request: Request):
 @router.get("/customer/{customer_id}/feedback-summary")
 async def customer_feedback_summary(customer_id: str, request: Request):
     """
-    Get the number of feedbacks submitted by a customer.
+    Retrieve the number of feedback entries submitted by a customer.
+
+    Args:
+        customer_id (str): The customer's user ID.
+
+    Returns:
+        dict: Contains customer_id and total_feedbacks_given.
     """
     db = get_db(request)
     count = await db["feedback"].count_documents({"customer_id": ObjectId(customer_id)})
@@ -83,28 +53,48 @@ async def customer_feedback_summary(customer_id: str, request: Request):
 @router.get("/driver/{driver_id}/completed-deliveries")
 async def completed_deliveries(driver_id: str, request: Request):
     """
-    Get the number of deliveries completed by a driver.
+    Get the number of completed and pending deliveries for a specific driver.
+
+    Args:
+        driver_id (str): The driver's user ID.
+
+    Returns:
+        dict: Completed and pending delivery counts for the driver.
     """
     db = get_db(request)
-    count = await db["delivery"].count_documents({
-        "driver_id": ObjectId(driver_id),
-        "status": "delivered"
-    })
+    delivered = await db["delivery"].count_documents({"driver_id": ObjectId(driver_id), "status": "delivered"})
+    pending = await db["delivery"].count_documents({"driver_id": ObjectId(driver_id), "status": "pending"})
 
     return {
         "driver_id": driver_id,
-        "completed_deliveries": count
+        "completed_deliveries": delivered,
+        "pending_deliveries": pending
     }
 
 @router.get("/customer/{customer_id}/deliveries")
 async def customer_delivery_count(customer_id: str, request: Request):
     """
-    Get total number of deliveries made by a customer.
+    Retrieve detailed delivery status counts for a specific customer.
+
+    Args:
+        customer_id (str): The customer's user ID.
+
+    Returns:
+        dict: Contains total, pending, accepted, in-transit, and completed deliveries.
     """
     db = get_db(request)
-    count = await db["delivery"].count_documents({"customer_id": ObjectId(customer_id)})
+    oid = ObjectId(customer_id)
+    total = await db["delivery"].count_documents({"customer_id": oid})
+    pending = await db["delivery"].count_documents({"customer_id": oid, "status": "pending"})
+    accepted = await db["delivery"].count_documents({"customer_id": oid, "status": "accepted"})
+    in_transit = await db["delivery"].count_documents({"customer_id": oid, "status": "in-transit"})
+    completed = await db["delivery"].count_documents({"customer_id": oid, "status": "delivered"})
 
     return {
         "customer_id": customer_id,
-        "total_deliveries": count
+        "total_deliveries": total,
+        "pending": pending,
+        "accepted": accepted,
+        "in_transit": in_transit,
+        "completed": completed
     }
